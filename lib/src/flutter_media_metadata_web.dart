@@ -51,8 +51,7 @@ class MetadataRetriever {
 
   Future<dynamic> handleMethodCall(MethodCall call) => throw PlatformException(
         code: 'Unimplemented',
-        details:
-            'flutter_media_metadata for web doesn\'t implement \'${call.method}\'',
+        details: 'flutter_media_metadata for web doesn\'t implement \'${call.method}\'',
       );
 
   /// Extracts [Metadata] from a [File]. Works on Windows, Linux, macOS, Android & iOS.
@@ -70,6 +69,7 @@ class MetadataRetriever {
         chunkSize: 256 * 1024,
         coverData: true,
         format: 'JSON',
+        full: true,
       ),
       allowInterop(
         (mediainfo) {
@@ -108,7 +108,11 @@ class MetadataRetriever {
                 }
                 final metadata = <String, dynamic>{
                   'metadata': {},
-                  'albumArt': base64Decode(rawMetadataJson['Cover_Data']),
+                  'albumArt': rawMetadataJson['Cover_Data'] == null
+                      ? null
+                      : base64Decode(
+                          rawMetadataJson['Cover_Data'],
+                        ),
                   'filePath': null,
                 };
                 _kMetadataKeys.forEach((key, value) {
@@ -126,7 +130,7 @@ class MetadataRetriever {
         },
       ),
       allowInterop(
-        () {
+        (err) {
           completer.completeError(Exception());
         },
       ),
@@ -137,10 +141,8 @@ class MetadataRetriever {
 
 @JS('Promise')
 class _Promise<T> {
-  external _Promise(
-      void Function(void Function(T result) resolve, Function reject) executor);
-  external _Promise then(void Function(T result) onFulfilled,
-      [Function onRejected]);
+  external _Promise(void Function(void Function(T result) resolve, Function reject) executor);
+  external _Promise then(void Function(T result) onFulfilled, [Function onRejected]);
   // external _Promise(void executor(void resolve(T result), Function reject));
   // external _Promise then(void onFulfilled(T result), [Function onRejected]);
 }
@@ -151,7 +153,7 @@ external String MediaInfo(
   Object opts,
   // ignore: library_private_types_in_public_api
   void Function(_MediaInfo) successCallback,
-  void Function() erroCallback,
+  void Function(dynamic) erroCallback,
 );
 
 @JS()
@@ -160,15 +162,16 @@ class _Opts {
   external int chunkSize;
   external bool coverData;
   external String format;
+  external bool full;
 
-  external factory _Opts({int chunkSize, bool coverData, String format});
+  external factory _Opts({int chunkSize, bool coverData, String format, bool full});
 }
 
 @JS()
 @anonymous
 class _MediaInfo {
-  external _Promise<String> analyzeData(int Function() getSize,
-      _Promise<Uint8List> Function(int chunkSize, int offset) promise);
+  external _Promise<String> analyzeData(
+      int Function() getSize, _Promise<Uint8List> Function(int chunkSize, int offset) promise);
   // _Promise<Uint8List> promise(int chunkSize, int offset));
 
   external factory _MediaInfo();
