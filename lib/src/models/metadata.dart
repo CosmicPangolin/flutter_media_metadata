@@ -55,8 +55,22 @@ class Metadata {
   /// [Uint8List] having album art data.
   final Uint8List? albumArt;
 
+  // Useful...
+  final String? albumArtMimeType;
+
   /// File path of the media file. `null` on web.
   final String? filePath;
+
+  // TODO: BPM implemented on web only for now
+  final int? bpm;
+
+  // TODO: Comment implemented on web only for now
+  final String? comment;
+
+  // TODO: Channels implemented on web only for now. Assuming int is correct?
+  final int? channels;
+
+  final int? sampleRate;
 
   const Metadata({
     this.trackName,
@@ -75,6 +89,11 @@ class Metadata {
     this.bitrate,
     this.albumArt,
     this.filePath,
+    this.bpm,
+    this.comment,
+    this.albumArtMimeType,
+    this.channels,
+    this.sampleRate,
   });
 
   factory Metadata.fromJson(dynamic map) => Metadata(
@@ -88,15 +107,20 @@ class Metadata {
         trackNumber: parseInteger(map['metadata']['trackNumber']),
         albumLength: parseInteger(map['metadata']['albumLength']),
         year: parseInteger(map['metadata']['year']),
-        genre: map['genre'],
         authorName: map['metadata']['authorName'],
         writerName: map['metadata']['writerName'],
         discNumber: parseInteger(map['metadata']['discNumber']),
         mimeType: map['metadata']['mimeType'],
         trackDuration: parseInteger(map['metadata']['trackDuration']),
         bitrate: parseInteger(map['metadata']['bitrate']),
+        bpm: parseInteger(map['metadata']['bpm']),
+        albumArtMimeType: map['metadata']['albumArtMimeType'],
+        channels: parseInteger(map['metadata']['channels']),
+        sampleRate: parseInteger(map['metadata']['sampleRate']),
+        comment: map['metadata']['comment'],
         albumArt: map['albumArt'],
         filePath: map['filePath'],
+        genre: map['genre'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -115,6 +139,11 @@ class Metadata {
         'trackDuration': trackDuration,
         'bitrate': bitrate,
         'filePath': filePath,
+        'bpm': bpm,
+        'comment': comment,
+        'channels': channels,
+        'sampleRate': sampleRate,
+        'albumArtMimeType': albumArtMimeType,
       };
 
   @override

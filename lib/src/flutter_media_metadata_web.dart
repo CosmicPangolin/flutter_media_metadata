@@ -8,7 +8,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:js/js.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
@@ -94,6 +93,8 @@ class MetadataRetriever {
               .then(
             allowInterop(
               (result) {
+                // Obnoxious print for a while to catch all interesting fields
+                print(result);
                 var rawMetadataJson = jsonDecode(result)['media']['track'];
                 bool isFound = false;
                 for (final data in rawMetadataJson) {
@@ -108,14 +109,15 @@ class MetadataRetriever {
                 }
                 final metadata = <String, dynamic>{
                   'metadata': {},
-                  'albumArt': rawMetadataJson['Cover_Data'] == null
-                      ? null
-                      : base64Decode(
+                  'albumArt': rawMetadataJson['Cover_Data'] != null
+                      ? base64Decode(
                           rawMetadataJson['Cover_Data'],
-                        ),
+                        )
+                      : null,
+                  'albumArtMimeType': rawMetadataJson['Cover_Mime'],
                   'filePath': null,
                 };
-                _kMetadataKeys.forEach((key, value) {
+                _kGeneralMetadataKeys.forEach((key, value) {
                   metadata['metadata'][key] = rawMetadataJson[value];
                 });
                 completer.complete(Metadata.fromJson(metadata));
@@ -177,7 +179,7 @@ class _MediaInfo {
   external factory _MediaInfo();
 }
 
-const _kMetadataKeys = <String, String>{
+const _kGeneralMetadataKeys = <String, String>{
   "trackName": "Track",
   "trackArtistNames": "Performer",
   "albumName": "Album",
@@ -189,4 +191,12 @@ const _kMetadataKeys = <String, String>{
   "writerName": "WrittenBy",
   "trackDuration": "Duration",
   "bitrate": "OverallBitRate",
+  "mimeType": "InternetMediaType",
+  "bpm": "BPM",
+  "comment": "Comment",
+};
+
+const _kAudioMetadataKeys = <String, String>{
+  "channels": "Channels",
+  "sampleRate": "SamplingRate",
 };
