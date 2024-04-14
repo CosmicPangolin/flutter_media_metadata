@@ -70,6 +70,7 @@ class Metadata {
   // TODO: Channels implemented on web only for now. Assuming int is correct?
   final int? channels;
 
+  // TODO: Sample rate implemented on web only for now
   final int? sampleRate;
 
   const Metadata({
