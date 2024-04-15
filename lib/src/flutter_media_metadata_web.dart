@@ -96,30 +96,38 @@ class MetadataRetriever {
                 // Obnoxious print for a while to catch all interesting fields
                 print(result);
                 var rawMetadataJson = jsonDecode(result)['media']['track'];
+
+                // Keeping original mappings for MediaInfo.from/toJson() for now so I don't have to fuck with the C++
+                Map<String, dynamic> metadata = <String, dynamic>{
+                  'metadata': {},
+                  'albumArt': null,
+                  'filePath': null,
+                };
+
                 bool isFound = false;
                 for (final data in rawMetadataJson) {
                   if (data['@type'] == 'General') {
                     isFound = true;
-                    rawMetadataJson = data;
-                    break;
+                    
+                    metadata['albumArt'] = rawMetadataJson['Cover_Data'] != null
+                        ? base64Decode(
+                            rawMetadataJson['Cover_Data'],
+                          )
+                        : null;
+
+                    _kGeneralMetadataKeys.forEach((key, value) {
+                      metadata['metadata'][key] = data[value];
+                    });
+                  } else if (data['@type'] == 'Audio') {
+                    _kAudioMetadataKeys.forEach((key, value) {
+                      metadata['metadata'][key] = data[value];
+                    });
                   }
                 }
                 if (!isFound) {
                   throw Exception();
                 }
-                final metadata = <String, dynamic>{
-                  'metadata': {},
-                  'albumArt': rawMetadataJson['Cover_Data'] != null
-                      ? base64Decode(
-                          rawMetadataJson['Cover_Data'],
-                        )
-                      : null,
-                  'albumArtMimeType': rawMetadataJson['Cover_Mime'],
-                  'filePath': null,
-                };
-                _kGeneralMetadataKeys.forEach((key, value) {
-                  metadata['metadata'][key] = rawMetadataJson[value];
-                });
+
                 completer.complete(Metadata.fromJson(metadata));
               },
             ),
@@ -192,6 +200,7 @@ const _kGeneralMetadataKeys = <String, String>{
   "trackDuration": "Duration",
   "bitrate": "OverallBitRate",
   "mimeType": "InternetMediaType",
+  "albumArtMimeType": "Cover_Mime",
   "bpm": "BPM",
   "comment": "Comment",
 };
