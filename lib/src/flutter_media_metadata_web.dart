@@ -108,10 +108,10 @@ class MetadataRetriever {
                 for (final data in rawMetadataJson) {
                   if (data['@type'] == 'General') {
                     isFound = true;
-                    
-                    metadata['albumArt'] = rawMetadataJson['Cover_Data'] != null
+
+                    metadata['albumArt'] = data['Cover_Data'] != null
                         ? base64Decode(
-                            rawMetadataJson['Cover_Data'],
+                            data['Cover_Data'],
                           )
                         : null;
 
