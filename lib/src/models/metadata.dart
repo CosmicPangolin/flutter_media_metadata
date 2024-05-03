@@ -97,7 +97,10 @@ class Metadata {
     this.sampleRate,
   });
 
-  factory Metadata.fromJson(dynamic map) => Metadata(
+  factory Metadata.fromJson(dynamic map) {
+    print(map['metadata']['trackDuration']);
+    print(map['metadata']['trackDuration'].runtimeType);
+    return Metadata(
         trackName: map['metadata']['trackName'],
         // trackArtistNames: map['metadata']['trackArtistNames'] != null
         //     ? map['metadata']['trackArtistNames'].split('/')
@@ -123,6 +126,7 @@ class Metadata {
         filePath: map['filePath'],
         genre: map['genre'],
       );
+  }
 
   Map<String, dynamic> toJson() => {
         'trackName': trackName,
