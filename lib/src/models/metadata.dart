@@ -6,8 +6,6 @@
 
 import 'dart:typed_data';
 
-import 'package:flutter_media_metadata/src/utils.dart';
-
 /// Metadata of a media file.
 class Metadata {
   /// Name of the track.
@@ -46,8 +44,8 @@ class Metadata {
   /// Mime type.
   final String? mimeType;
 
-  /// Duration of the track in milliseconds.
-  final int? trackDuration;
+  /// Duration of the track in seconds.
+  final double? trackDuration;
 
   /// Bitrate of the track.
   final int? bitrate;
@@ -98,8 +96,6 @@ class Metadata {
   });
 
   factory Metadata.fromJson(dynamic map) {
-    print(map['metadata']['trackDuration']);
-    print(map['metadata']['trackDuration'].runtimeType);
     return Metadata(
         trackName: map['metadata']['trackName'],
         // trackArtistNames: map['metadata']['trackArtistNames'] != null
@@ -108,19 +104,19 @@ class Metadata {
         trackArtistNames: map['metadata']['trackArtistNames']?.split('/'),
         albumName: map['metadata']['albumName'],
         albumArtistName: map['metadata']['albumArtistName'],
-        trackNumber: parseInteger(map['metadata']['trackNumber']),
-        albumLength: parseInteger(map['metadata']['albumLength']),
-        year: parseInteger(map['metadata']['year']),
+        trackNumber: int.tryParse(map['metadata']['trackNumber']),
+        albumLength: int.tryParse(map['metadata']['albumLength']),
+        year: int.tryParse(map['metadata']['year']),
         authorName: map['metadata']['authorName'],
         writerName: map['metadata']['writerName'],
-        discNumber: parseInteger(map['metadata']['discNumber']),
+        discNumber: int.tryParse(map['metadata']['discNumber']),
         mimeType: map['metadata']['mimeType'],
-        trackDuration: parseInteger(map['metadata']['trackDuration']),
-        bitrate: parseInteger(map['metadata']['bitrate']),
-        bpm: parseInteger(map['metadata']['bpm']),
+        trackDuration: double.tryParse(map['metadata']['trackDuration']),
+        bitrate: int.tryParse(map['metadata']['bitrate']),
+        bpm: int.tryParse(map['metadata']['bpm']),
         albumArtMimeType: map['metadata']['albumArtMimeType'],
-        channels: parseInteger(map['metadata']['channels']),
-        sampleRate: parseInteger(map['metadata']['sampleRate']),
+        channels: int.tryParse(map['metadata']['channels']),
+        sampleRate: int.tryParse(map['metadata']['sampleRate']),
         comment: map['metadata']['comment'],
         albumArt: map['albumArt'],
         filePath: map['filePath'],
