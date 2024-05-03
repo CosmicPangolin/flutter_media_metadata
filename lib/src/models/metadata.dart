@@ -97,31 +97,32 @@ class Metadata {
 
   factory Metadata.fromJson(dynamic map) {
     return Metadata(
-        trackName: map['metadata']['trackName'],
-        // trackArtistNames: map['metadata']['trackArtistNames'] != null
-        //     ? map['metadata']['trackArtistNames'].split('/')
-        //     : null,
-        trackArtistNames: map['metadata']['trackArtistNames']?.split('/'),
-        albumName: map['metadata']['albumName'],
-        albumArtistName: map['metadata']['albumArtistName'],
-        trackNumber: int.tryParse(map['metadata']['trackNumber']),
-        albumLength: int.tryParse(map['metadata']['albumLength']),
-        year: int.tryParse(map['metadata']['year']),
-        authorName: map['metadata']['authorName'],
-        writerName: map['metadata']['writerName'],
-        discNumber: int.tryParse(map['metadata']['discNumber']),
-        mimeType: map['metadata']['mimeType'],
-        trackDuration: double.tryParse(map['metadata']['trackDuration']),
-        bitrate: int.tryParse(map['metadata']['bitrate']),
-        bpm: int.tryParse(map['metadata']['bpm']),
-        albumArtMimeType: map['metadata']['albumArtMimeType'],
-        channels: int.tryParse(map['metadata']['channels']),
-        sampleRate: int.tryParse(map['metadata']['sampleRate']),
-        comment: map['metadata']['comment'],
-        albumArt: map['albumArt'],
-        filePath: map['filePath'],
-        genre: map['genre'],
-      );
+      trackName: map['metadata']['trackName'],
+      // trackArtistNames: map['metadata']['trackArtistNames'] != null
+      //     ? map['metadata']['trackArtistNames'].split('/')
+      //     : null,
+      trackArtistNames: map['metadata']['trackArtistNames']?.split('/'),
+      albumName: map['metadata']['albumName'],
+      albumArtistName: map['metadata']['albumArtistName'],
+      trackNumber: map['metadata']['trackNumber'] != null ? int.tryParse(map['metadata']['trackNumber']) : null,
+      albumLength: map['metadata']['albumLength'] != null ? int.tryParse(map['metadata']['albumLength']) : null,
+      year: map['metadata']['year'] != null ? int.tryParse(map['metadata']['year']) : null,
+      authorName: map['metadata']['authorName'],
+      writerName: map['metadata']['writerName'],
+      discNumber: map['metadata']['discNumber'] != null ? int.tryParse(map['metadata']['discNumber']) : null,
+      mimeType: map['metadata']['mimeType'],
+      trackDuration:
+          map['metadata']['trackDuration'] != null ? double.tryParse(map['metadata']['trackDuration']) : null,
+      bitrate: map['metadata']['bitrate'] != null ? int.tryParse(map['metadata']['bitrate']) : null,
+      bpm: map['metadata']['bpm'] != null ? int.tryParse(map['metadata']['bpm']) : null,
+      albumArtMimeType: map['metadata']['albumArtMimeType'],
+      channels: map['metadata']['channels'] != null ? int.tryParse(map['metadata']['channels']) : null,
+      sampleRate: map['metadata']['sampleRate'] != null ? int.tryParse(map['metadata']['sampleRate']) : null,
+      comment: map['metadata']['comment'],
+      albumArt: map['albumArt'],
+      filePath: map['filePath'],
+      genre: map['genre'],
+    );
   }
 
   Map<String, dynamic> toJson() => {
