@@ -121,7 +121,7 @@ class Metadata {
       comment: map['metadata']['comment'],
       albumArt: map['albumArt'],
       filePath: map['filePath'],
-      genre: map['genre'],
+      genre: map['metadata']['genre'],
     );
   }
 
