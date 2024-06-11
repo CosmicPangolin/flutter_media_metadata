@@ -109,7 +109,16 @@ class MetadataRetriever {
                 if (data['@type'] == 'General') {
                   isFound = true;
 
-                  metadata['albumArt'] = data['Cover_Data'] != null ? base64Decode(data['Cover_Data']) : null;
+                  try {
+                    metadata['albumArt'] = data['Cover_Data'] != null
+                        ? base64Decode(
+                      data['Cover_Data'],
+                    )
+                        : null;
+                  } catch (e) {
+                    print('Failed to decode album art');
+                    print(e);
+                  }
 
                   _kGeneralMetadataKeys.forEach((key, value) {
                     metadata['metadata'][key] = data[value];
