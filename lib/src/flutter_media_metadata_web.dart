@@ -63,34 +63,38 @@ class MetadataRetriever {
   static Future<Metadata> fromBytes(Uint8List bytes) {
     final completer = Completer<Metadata>();
 
-    // Create MediaInfo options object
-    final opts = createMediaInfoOptions(
-      chunkSize: 256 * 1024,
-      coverData: true,
-      format: 'JSON',
-      full: true,
-    );
+    // Create MediaInfo options object using dynamic properties
+    final opts = newObject();
+    opts['chunkSize'] = (256 * 1024).toJS;
+    opts['coverData'] = true.toJS;
+    opts['format'] = 'JSON'.toJS;
+    opts['full'] = true.toJS;
 
     // Call MediaInfo constructor
-    createMediaInfo(
+    final mediaInfoConstructor = globalContext['MediaInfo'] as JSFunction;
+    mediaInfoConstructor.callAsFunction(
+      null,
       opts,
-      (JSObject mediainfo) {
+      (JSAny mediainfo) {
         // Create the promise for analyzeData
-        final promise = callAnalyzeData(
-          mediainfo,
+        final promise = (mediainfo as JSObject).callMethod(
+          'analyzeData'.toJS,
           (() => bytes.length.toJS).toJS,
           (int chunkSize, int offset) {
-            return createPromise((JSFunction resolve, JSFunction reject) {
-              final sublist = bytes.sublist(offset, offset + chunkSize);
-              final jsArray = sublist.toJS;
-              resolve.callAsFunction(null, jsArray);
-            }.toJS);
+            final promiseConstructor = globalContext['Promise'] as JSFunction;
+            return promiseConstructor.callAsFunction(
+                null,
+                (JSFunction resolve, JSFunction reject) {
+                  final sublist = bytes.sublist(offset, offset + chunkSize);
+                  final jsArray = sublist.toJS;
+                  resolve.callAsFunction(null, jsArray);
+                }.toJS);
           }.toJS,
-        );
+        ) as JSObject;
 
         // Handle the promise result
-        callThen(
-          promise,
+        promise.callMethod(
+          'then'.toJS,
           (JSString result) {
             try {
               // Parse the metadata result from MediaInfo
@@ -112,14 +116,13 @@ class MetadataRetriever {
                   try {
                     metadata['albumArt'] = data['Cover_Data'] != null
                         ? base64Decode(
-                      data['Cover_Data'],
-                    )
+                            data['Cover_Data'],
+                          )
                         : null;
                   } catch (e) {
                     print('Failed to decode album art');
                     print(e);
                   }
-
                   _kGeneralMetadataKeys.forEach((key, value) {
                     metadata['metadata'][key] = data[value];
                   });
@@ -154,42 +157,8 @@ class MetadataRetriever {
   }
 }
 
-// MediaInfo JavaScript interop using dart:js_interop
-
-@JS('MediaInfo')
-external void createMediaInfo(
-  JSObject opts,
-  JSFunction successCallback,
-  JSFunction errorCallback,
-);
-
-@JS('Object')
-external JSObject createMediaInfoOptions({
-  required int chunkSize,
-  required bool coverData,
-  required String format,
-  required bool full,
-});
-
-@JS('Promise')
-external JSObject createPromise(JSFunction executor);
-
-// Helper functions to call methods on JS objects
-JSObject callAnalyzeData(
-  JSObject mediaInfo,
-  JSFunction getSize,
-  JSFunction readChunk,
-) {
-  return mediaInfo.callMethod('analyzeData'.toJS, getSize, readChunk);
-}
-
-void callThen(
-  JSObject promise,
-  JSFunction onFulfilled,
-  JSFunction onRejected,
-) {
-  promise.callMethod('then'.toJS, onFulfilled, onRejected);
-}
+// Helper function to create new objects
+JSObject newObject() => (globalContext['Object']! as JSFunction).callAsFunction() as JSObject;
 
 const _kGeneralMetadataKeys = <String, String>{
   "trackName": "Track",
