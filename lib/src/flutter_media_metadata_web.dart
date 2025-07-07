@@ -4,11 +4,10 @@
 /// All rights reserved.
 /// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 
-// ignore_for_file: missing_js_lib_annotation
-
 import 'dart:async';
 import 'dart:convert';
-import 'package:js/js.dart';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
@@ -63,128 +62,124 @@ class MetadataRetriever {
   /// Extracts [Metadata] from [Uint8List]. Works only on Web.
   static Future<Metadata> fromBytes(Uint8List bytes) {
     final completer = Completer<Metadata>();
-    MediaInfo(
-      _Opts(
-        chunkSize: 256 * 1024,
-        coverData: true,
-        format: 'JSON',
-        full: true,
-      ),
-      allowInterop(
-        (mediainfo) {
-          mediainfo
-              .analyzeData(
-            allowInterop(() => bytes.length),
-            allowInterop(
-              (chunkSize, offset) => _Promise(
-                allowInterop(
-                  (resolve, reject) {
-                    resolve(
-                      bytes.sublist(
-                        offset,
-                        offset + chunkSize,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          )
-              .then(
-            allowInterop(
-              (result) {
-                // Obnoxious print for a while to catch all interesting fields
-                print(result);
-                var rawMetadataJson = jsonDecode(result)['media']['track'];
 
-                // Keeping original mappings for MediaInfo.from/toJson() for now so I don't have to fuck with the C++
-                Map<String, dynamic> metadata = <String, dynamic>{
-                  'metadata': {},
-                  'albumArt': null,
-                  'filePath': null,
-                };
-
-                bool isFound = false;
-                for (final data in rawMetadataJson) {
-                  if (data['@type'] == 'General') {
-                    isFound = true;
-
-                    metadata['albumArt'] = data['Cover_Data'] != null
-                        ? base64Decode(
-                            data['Cover_Data'],
-                          )
-                        : null;
-
-                    _kGeneralMetadataKeys.forEach((key, value) {
-                      metadata['metadata'][key] = data[value];
-                    });
-                  } else if (data['@type'] == 'Audio') {
-                    _kAudioMetadataKeys.forEach((key, value) {
-                      metadata['metadata'][key] = data[value];
-                    });
-                  }
-                }
-                if (!isFound) {
-                  throw Exception();
-                }
-
-                completer.complete(Metadata.fromJson(metadata));
-              },
-            ),
-            allowInterop(
-              () {
-                completer.completeError(Exception());
-              },
-            ),
-          );
-        },
-      ),
-      allowInterop(
-        (err) {
-          completer.completeError(Exception());
-        },
-      ),
+    // Create MediaInfo options object
+    final opts = createMediaInfoOptions(
+      chunkSize: 256 * 1024,
+      coverData: true,
+      format: 'JSON',
+      full: true,
     );
+
+    // Call MediaInfo constructor
+    createMediaInfo(
+      opts,
+      (JSObject mediainfo) {
+        // Create the promise for analyzeData
+        final promise = callAnalyzeData(
+          mediainfo,
+          (() => bytes.length.toJS).toJS,
+          (int chunkSize, int offset) {
+            return createPromise((JSFunction resolve, JSFunction reject) {
+              final sublist = bytes.sublist(offset, offset + chunkSize);
+              final jsArray = sublist.toJS;
+              resolve.callAsFunction(null, jsArray);
+            }.toJS);
+          }.toJS,
+        );
+
+        // Handle the promise result
+        callThen(
+          promise,
+          (JSString result) {
+            try {
+              // Parse the metadata result from MediaInfo
+              // print(result.toDart); // Uncomment for debugging
+              final rawMetadataJson = jsonDecode(result.toDart)['media']['track'];
+
+              // Keeping original mappings for MediaInfo.from/toJson() for now so I don't have to fuck with the C++
+              Map<String, dynamic> metadata = <String, dynamic>{
+                'metadata': {},
+                'albumArt': null,
+                'filePath': null,
+              };
+
+              bool isFound = false;
+              for (final data in rawMetadataJson) {
+                if (data['@type'] == 'General') {
+                  isFound = true;
+
+                  metadata['albumArt'] = data['Cover_Data'] != null ? base64Decode(data['Cover_Data']) : null;
+
+                  _kGeneralMetadataKeys.forEach((key, value) {
+                    metadata['metadata'][key] = data[value];
+                  });
+                } else if (data['@type'] == 'Audio') {
+                  _kAudioMetadataKeys.forEach((key, value) {
+                    metadata['metadata'][key] = data[value];
+                  });
+                }
+              }
+
+              if (!isFound) {
+                completer.completeError(Exception('No metadata found'));
+                return;
+              }
+
+              completer.complete(Metadata.fromJson(metadata));
+            } catch (e) {
+              completer.completeError(e);
+            }
+          }.toJS,
+          (JSAny? error) {
+            completer.completeError(Exception('MediaInfo analysis failed'));
+          }.toJS,
+        );
+      }.toJS,
+      (JSAny? error) {
+        completer.completeError(Exception('Failed to create MediaInfo instance'));
+      }.toJS,
+    );
+
     return completer.future;
   }
 }
 
-@JS('Promise')
-class _Promise<T> {
-  external _Promise(void Function(void Function(T result) resolve, Function reject) executor);
-  external _Promise then(void Function(T result) onFulfilled, [Function onRejected]);
-  // external _Promise(void executor(void resolve(T result), Function reject));
-  // external _Promise then(void onFulfilled(T result), [Function onRejected]);
-}
+// MediaInfo JavaScript interop using dart:js_interop
 
 @JS('MediaInfo')
-// ignore: non_constant_identifier_names
-external String MediaInfo(
-  Object opts,
-  // ignore: library_private_types_in_public_api
-  void Function(_MediaInfo) successCallback,
-  void Function(dynamic) erroCallback,
+external void createMediaInfo(
+  JSObject opts,
+  JSFunction successCallback,
+  JSFunction errorCallback,
 );
 
-@JS()
-@anonymous
-class _Opts {
-  external int chunkSize;
-  external bool coverData;
-  external String format;
-  external bool full;
+@JS('Object')
+external JSObject createMediaInfoOptions({
+  required int chunkSize,
+  required bool coverData,
+  required String format,
+  required bool full,
+});
 
-  external factory _Opts({int chunkSize, bool coverData, String format, bool full});
+@JS('Promise')
+external JSObject createPromise(JSFunction executor);
+
+// Helper functions to call methods on JS objects
+JSObject callAnalyzeData(
+  JSObject mediaInfo,
+  JSFunction getSize,
+  JSFunction readChunk,
+) {
+  return mediaInfo.callMethod('analyzeData'.toJS, getSize, readChunk);
 }
 
-@JS()
-@anonymous
-class _MediaInfo {
-  external _Promise<String> analyzeData(
-      int Function() getSize, _Promise<Uint8List> Function(int chunkSize, int offset) promise);
-  // _Promise<Uint8List> promise(int chunkSize, int offset));
-
-  external factory _MediaInfo();
+void callThen(
+  JSObject promise,
+  JSFunction onFulfilled,
+  JSFunction onRejected,
+) {
+  promise.callMethod('then'.toJS, onFulfilled, onRejected);
 }
 
 const _kGeneralMetadataKeys = <String, String>{
