@@ -80,7 +80,7 @@ class MetadataRetriever {
         final promise = (mediainfo as JSObject).callMethod(
           'analyzeData'.toJS,
           (() => bytes.length.toJS).toJS,
-          (int chunkSize, int offset) {
+          ((int chunkSize, int offset) {
             final promiseConstructor = globalContext['Promise'] as JSFunction;
             return promiseConstructor.callAsConstructor(
                 null,
@@ -88,8 +88,9 @@ class MetadataRetriever {
                   final sublist = bytes.sublist(offset, offset + chunkSize);
                   final jsArray = sublist.toJS;
                   resolve.callAsConstructor(null, jsArray);
-                }.toJS);
-          }.toJS,
+                }.toJS) as JSObject;
+          } as JSObject Function(int, int))
+              .toJS,
         ) as JSObject;
 
         // Handle the promise result
