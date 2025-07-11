@@ -87,42 +87,48 @@ class MetadataRetriever {
       mediaInfoPromise.callMethod(
         'then'.toJS,
         (JSAny mediainfo) {
-          // Now use analyzeData
-          final promise = (mediainfo as JSObject).callMethod(
-            'analyzeData'.toJS,
-            bytes.length.toJS,
-            ((int chunkSize, int offset) {
+          try {
+            // Create a simpler readChunk function that uses async/await pattern
+            final readChunkJS = (int chunkSize, int offset) {
+              // Create a resolved Promise directly
               final promiseConstructor = globalContext['Promise'] as JSFunction;
-              return promiseConstructor.callAsConstructor(
-                  null,
-                  (JSFunction resolve, JSFunction reject) {
-                    final endOffset = (offset + chunkSize).clamp(0, bytes.length);
-                    final sublist = bytes.sublist(offset, endOffset);
-                    resolve.callAsConstructor(null, sublist.toJS);
-                  }.toJS) as JSObject;
-            } as JSObject Function(int, int))
-                .toJS,
-          ) as JSObject;
 
-          // Handle the analysis result
-          promise.callMethod(
-            'then'.toJS,
-            (JSString result) {
-              try {
-                _processResult(result.toDart, completer);
-              } catch (e) {
-                completer.completeError(e);
-              }
-            }.toJS,
-            (JSAny? error) {
-              completer.completeError(Exception('MediaInfo analysis failed: $error'));
-            }.toJS,
-          );
+              // Calculate the chunk
+              final endOffset = (offset + chunkSize).clamp(0, bytes.length);
+              final sublist = bytes.sublist(offset, endOffset);
+
+              // Return Promise.resolve(chunk)
+              return (promiseConstructor as JSObject).callMethod('resolve'.toJS, sublist.toJS) as JSObject;
+            }.toJS;
+
+            // Now use analyzeData with the callback approach
+            (mediainfo as JSObject).callMethod(
+              'analyzeData'.toJS,
+              bytes.length.toJS,
+              readChunkJS,
+              (JSString result) {
+                try {
+                  _processResult(result.toDart, completer);
+                } catch (e) {
+                  completer.completeError(Exception('Result processing failed: $e'));
+                }
+              }.toJS,
+            );
+          } catch (e) {
+            completer.completeError(Exception('Failed to call analyzeData: $e'));
+          }
         }.toJS,
         (JSAny? error) {
           completer.completeError(Exception('MediaInfo factory failed: $error'));
         }.toJS,
       );
+
+      // Add timeout
+      Timer(Duration(seconds: 30), () {
+        if (!completer.isCompleted) {
+          completer.completeError(Exception('MediaInfo analysis timed out'));
+        }
+      });
     } catch (e) {
       completer.completeError(Exception('MediaInfo initialization failed: $e'));
     }
@@ -131,7 +137,6 @@ class MetadataRetriever {
   }
 
   static void _processResult(String resultJson, Completer<Metadata> completer) {
-    // Same processing logic as before...
     try {
       final rawMetadataJson = jsonDecode(resultJson)['media']['track'];
 
