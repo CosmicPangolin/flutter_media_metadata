@@ -72,7 +72,7 @@ class MetadataRetriever {
 
     // Call MediaInfo constructor
     final mediaInfoConstructor = globalContext['MediaInfo'] as JSFunction;
-    mediaInfoConstructor.callAsFunction(
+    mediaInfoConstructor.callAsConstructor(
       null,
       opts,
       (JSAny mediainfo) {
@@ -82,12 +82,12 @@ class MetadataRetriever {
           (() => bytes.length.toJS).toJS,
           (int chunkSize, int offset) {
             final promiseConstructor = globalContext['Promise'] as JSFunction;
-            return promiseConstructor.callAsFunction(
+            return promiseConstructor.callAsConstructor(
                 null,
                 (JSFunction resolve, JSFunction reject) {
                   final sublist = bytes.sublist(offset, offset + chunkSize);
                   final jsArray = sublist.toJS;
-                  resolve.callAsFunction(null, jsArray);
+                  resolve.callAsConstructor(null, jsArray);
                 }.toJS);
           }.toJS,
         ) as JSObject;
@@ -158,7 +158,7 @@ class MetadataRetriever {
 }
 
 // Helper function to create new objects
-JSObject newObject() => (globalContext['Object']! as JSFunction).callAsFunction() as JSObject;
+JSObject newObject() => (globalContext['Object']! as JSFunction).callAsConstructor() as JSObject;
 
 const _kGeneralMetadataKeys = <String, String>{
   "trackName": "Track",
