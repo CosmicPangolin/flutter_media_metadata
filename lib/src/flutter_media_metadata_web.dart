@@ -71,66 +71,85 @@ class MetadataRetriever {
         return completer.future;
       }
 
-      // Create MediaInfo options object
+      // Create MediaInfo options object using dynamic properties
       final opts = newObject();
+      opts['chunkSize'] = (64 * 1024).toJS; // Reduce chunk size to prevent blocking
+      opts['coverData'] = true.toJS;
       opts['format'] = 'JSON'.toJS;
       opts['full'] = true.toJS;
-      opts['coverData'] = true.toJS;
 
-      // Use MediaInfo factory function (modern MediaInfo.js API)
-      final mediaInfoFactory = globalContext['MediaInfo'] as JSFunction;
-
-      // Call factory with options and callback
-      mediaInfoFactory.callAsConstructor(
+      // Call MediaInfo constructor with callbacks
+      final mediaInfoConstructor = globalContext['MediaInfo'] as JSFunction;
+      mediaInfoConstructor.callAsConstructor(
         opts,
         (JSAny mediainfo) {
+          // Success callback - MediaInfo instance created
           try {
-            // Define the readChunk function that returns a Promise
-            JSFunction readChunk = ((int chunkSize, int offset) {
-              final promiseConstructor = globalContext['Promise'] as JSFunction;
-              return promiseConstructor.callAsConstructor(
-                (JSFunction resolve, JSFunction reject) {
-                  try {
-                    if (offset >= bytes.length) {
-                      // Return empty array for EOF
-                      final emptyArray = Uint8List(0).toJS;
-                      resolve.callAsConstructor(null, emptyArray);
-                      return;
-                    }
-
-                    final endOffset = (offset + chunkSize).clamp(0, bytes.length);
-                    final chunk = bytes.sublist(offset, endOffset);
-                    final jsArray = chunk.toJS; // Use .toJS instead of JSUint8Array.fromList
-                    resolve.callAsConstructor(null, jsArray);
-                  } catch (e) {
-                    reject.callAsConstructor(null, 'Failed to read chunk: $e'.toJS);
-                  }
-                }.toJS,
-              ) as JSObject;
-            } as JSObject Function(int, int))
-                .toJS;
-
-            // Call analyzeData with file size, readChunk function, and result callback
-            (mediainfo as JSObject).callMethod(
+            // Create the analyzeData call
+            final promise = (mediainfo as JSObject).callMethod(
               'analyzeData'.toJS,
               bytes.length.toJS,
-              readChunk,
+              (int chunkSize, int offset) {
+                // Return a Promise that resolves with the chunk data
+                final promiseConstructor = globalContext['Promise'] as JSFunction;
+                return promiseConstructor.callAsConstructor(
+                  (JSFunction resolve, JSFunction reject) {
+                    try {
+                      // Add a small delay to prevent blocking
+                      globalContext.callMethod(
+                          'setTimeout'.toJS,
+                          (() {
+                            try {
+                              if (offset >= bytes.length) {
+                                resolve.callAsConstructor(null, Uint8List(0).toJS);
+                                return;
+                              }
+
+                              final endOffset = (offset + chunkSize).clamp(0, bytes.length);
+                              final sublist = bytes.sublist(offset, endOffset);
+                              resolve.callAsConstructor(null, sublist.toJS);
+                            } catch (e) {
+                              reject.callAsConstructor(null, 'Chunk read error: $e'.toJS);
+                            }
+                          }).toJS,
+                          0.toJS);
+                    } catch (e) {
+                      reject.callAsConstructor(null, 'Promise creation error: $e'.toJS);
+                    }
+                  }.toJS,
+                ) as JSObject;
+              }.toJS,
+            ) as JSObject;
+
+            // Handle the promise result
+            promise.callMethod(
+              'then'.toJS,
               (JSString result) {
                 try {
                   _processMediaInfoResult(result.toDart, completer);
                 } catch (e) {
-                  completer.completeError(Exception('Failed to process MediaInfo result: $e'));
+                  completer.completeError(Exception('Result processing failed: $e'));
                 }
+              }.toJS,
+              (JSAny? error) {
+                completer.completeError(Exception('MediaInfo analysis failed: $error'));
               }.toJS,
             );
           } catch (e) {
-            completer.completeError(Exception('Failed to analyze data: $e'));
+            completer.completeError(Exception('Failed to call analyzeData: $e'));
           }
         }.toJS,
         (JSAny? error) {
           completer.completeError(Exception('Failed to create MediaInfo instance: $error'));
         }.toJS,
       );
+
+      // Add a timeout to prevent hanging
+      Timer(Duration(seconds: 30), () {
+        if (!completer.isCompleted) {
+          completer.completeError(Exception('MediaInfo analysis timed out'));
+        }
+      });
     } catch (e) {
       completer.completeError(Exception('MediaInfo initialization failed: $e'));
     }
