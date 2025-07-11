@@ -60,96 +60,69 @@ class MetadataRetriever {
   }
 
   /// Extracts [Metadata] from [Uint8List]. Works only on Web.
-  static Future<Metadata> fromBytes(Uint8List bytes) {
+  static Future<Metadata> fromBytes(Uint8List bytes) async {
     final completer = Completer<Metadata>();
 
     try {
-      // Check if MediaInfo is available
+      // Check if MediaInfo factory is available
       if (globalContext['MediaInfo'] == null) {
         completer
             .completeError(Exception('MediaInfo.js library not loaded. Make sure to include the script in your HTML.'));
         return completer.future;
       }
 
-      // Create MediaInfo options object using dynamic properties
+      // MediaInfo is now a factory function with the ESM bundle
+      final mediaInfoFactory = globalContext['MediaInfo'] as JSFunction;
+
+      // Create options
       final opts = newObject();
-      opts['chunkSize'] = (64 * 1024).toJS; // Reduce chunk size to prevent blocking
-      opts['coverData'] = true.toJS;
       opts['format'] = 'JSON'.toJS;
       opts['full'] = true.toJS;
+      opts['coverData'] = true.toJS;
 
-      // Call MediaInfo constructor with callbacks
-      final mediaInfoConstructor = globalContext['MediaInfo'] as JSFunction;
-      mediaInfoConstructor.callAsConstructor(
-        opts,
+      // Call the factory function
+      final mediaInfoPromise = mediaInfoFactory.callAsConstructor(opts) as JSObject;
+
+      // Handle the factory promise
+      mediaInfoPromise.callMethod(
+        'then'.toJS,
         (JSAny mediainfo) {
-          // Success callback - MediaInfo instance created
-          try {
-            // Create the analyzeData call
-            final promise = (mediainfo as JSObject).callMethod(
-              'analyzeData'.toJS,
-              bytes.length.toJS,
-              (int chunkSize, int offset) {
-                // Return a Promise that resolves with the chunk data
-                final promiseConstructor = globalContext['Promise'] as JSFunction;
-                return promiseConstructor.callAsConstructor(
+          // Now use analyzeData
+          final promise = (mediainfo as JSObject).callMethod(
+            'analyzeData'.toJS,
+            bytes.length.toJS,
+            ((int chunkSize, int offset) {
+              final promiseConstructor = globalContext['Promise'] as JSFunction;
+              return promiseConstructor.callAsConstructor(
+                  null,
                   (JSFunction resolve, JSFunction reject) {
-                    try {
-                      // Add a small delay to prevent blocking
-                      globalContext.callMethod(
-                          'setTimeout'.toJS,
-                          (() {
-                            try {
-                              if (offset >= bytes.length) {
-                                resolve.callAsConstructor(null, Uint8List(0).toJS);
-                                return;
-                              }
+                    final endOffset = (offset + chunkSize).clamp(0, bytes.length);
+                    final sublist = bytes.sublist(offset, endOffset);
+                    resolve.callAsConstructor(null, sublist.toJS);
+                  }.toJS) as JSObject;
+            } as JSObject Function(int, int))
+                .toJS,
+          ) as JSObject;
 
-                              final endOffset = (offset + chunkSize).clamp(0, bytes.length);
-                              final sublist = bytes.sublist(offset, endOffset);
-                              resolve.callAsConstructor(null, sublist.toJS);
-                            } catch (e) {
-                              reject.callAsConstructor(null, 'Chunk read error: $e'.toJS);
-                            }
-                          }).toJS,
-                          0.toJS);
-                    } catch (e) {
-                      reject.callAsConstructor(null, 'Promise creation error: $e'.toJS);
-                    }
-                  }.toJS,
-                ) as JSObject;
-              }.toJS,
-            ) as JSObject;
-
-            // Handle the promise result
-            promise.callMethod(
-              'then'.toJS,
-              (JSString result) {
-                try {
-                  _processMediaInfoResult(result.toDart, completer);
-                } catch (e) {
-                  completer.completeError(Exception('Result processing failed: $e'));
-                }
-              }.toJS,
-              (JSAny? error) {
-                completer.completeError(Exception('MediaInfo analysis failed: $error'));
-              }.toJS,
-            );
-          } catch (e) {
-            completer.completeError(Exception('Failed to call analyzeData: $e'));
-          }
+          // Handle the analysis result
+          promise.callMethod(
+            'then'.toJS,
+            (JSString result) {
+              try {
+                _processResult(result.toDart, completer);
+              } catch (e) {
+                completer.completeError(e);
+              }
+            }.toJS,
+            (JSAny? error) {
+              completer.completeError(Exception('MediaInfo analysis failed: $error'));
+            }.toJS,
+          );
         }.toJS,
         (JSAny? error) {
-          completer.completeError(Exception('Failed to create MediaInfo instance: $error'));
+          completer.completeError(Exception('MediaInfo factory failed: $error'));
         }.toJS,
       );
-
-      // Add a timeout to prevent hanging
-      Timer(Duration(seconds: 30), () {
-        if (!completer.isCompleted) {
-          completer.completeError(Exception('MediaInfo analysis timed out'));
-        }
-      });
     } catch (e) {
       completer.completeError(Exception('MediaInfo initialization failed: $e'));
     }
@@ -157,12 +130,11 @@ class MetadataRetriever {
     return completer.future;
   }
 
-  static void _processMediaInfoResult(String resultJson, Completer<Metadata> completer) {
+  static void _processResult(String resultJson, Completer<Metadata> completer) {
+    // Same processing logic as before...
     try {
-      // Parse the metadata result from MediaInfo
       final rawMetadataJson = jsonDecode(resultJson)['media']['track'];
 
-      // Create metadata structure compatible with existing parsing
       Map<String, dynamic> metadata = <String, dynamic>{
         'metadata': {},
         'albumArt': null,
@@ -173,13 +145,11 @@ class MetadataRetriever {
       for (final data in rawMetadataJson) {
         if (data['@type'] == 'General') {
           isFound = true;
-
           try {
             metadata['albumArt'] = data['Cover_Data'] != null ? base64Decode(data['Cover_Data']) : null;
           } catch (e) {
             print('Failed to decode album art: $e');
           }
-
           _kGeneralMetadataKeys.forEach((key, value) {
             metadata['metadata'][key] = data[value];
           });
