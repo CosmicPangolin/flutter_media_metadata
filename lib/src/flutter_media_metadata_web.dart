@@ -63,98 +63,123 @@ class MetadataRetriever {
   static Future<Metadata> fromBytes(Uint8List bytes) {
     final completer = Completer<Metadata>();
 
-    // Create MediaInfo options object using dynamic properties
-    final opts = newObject();
-    opts['chunkSize'] = (256 * 1024).toJS;
-    opts['coverData'] = true.toJS;
-    opts['format'] = 'JSON'.toJS;
-    opts['full'] = true.toJS;
+    try {
+      // Check if MediaInfo is available
+      if (globalContext['MediaInfo'] == null) {
+        completer
+            .completeError(Exception('MediaInfo.js library not loaded. Make sure to include the script in your HTML.'));
+        return completer.future;
+      }
 
-    // Call MediaInfo constructor
-    final mediaInfoConstructor = globalContext['MediaInfo'] as JSFunction;
-    mediaInfoConstructor.callAsConstructor(
-      null,
-      opts,
-      (JSAny mediainfo) {
-        // Create the promise for analyzeData
-        final promise = (mediainfo as JSObject).callMethod(
-          'analyzeData'.toJS,
-          (() => bytes.length.toJS).toJS,
-          ((int chunkSize, int offset) {
-            final promiseConstructor = globalContext['Promise'] as JSFunction;
-            return promiseConstructor.callAsConstructor(
-                null,
+      // Create MediaInfo options object
+      final opts = newObject();
+      opts['format'] = 'JSON'.toJS;
+      opts['full'] = true.toJS;
+      opts['coverData'] = true.toJS;
+
+      // Use MediaInfo factory function (modern MediaInfo.js API)
+      final mediaInfoFactory = globalContext['MediaInfo'] as JSFunction;
+
+      // Call factory with options and callback
+      mediaInfoFactory.callAsConstructor(
+        opts,
+        (JSAny mediainfo) {
+          try {
+            // Define the readChunk function that returns a Promise
+            JSFunction readChunk = ((int chunkSize, int offset) {
+              final promiseConstructor = globalContext['Promise'] as JSFunction;
+              return promiseConstructor.callAsConstructor(
                 (JSFunction resolve, JSFunction reject) {
-                  final sublist = bytes.sublist(offset, offset + chunkSize);
-                  final jsArray = sublist.toJS;
-                  resolve.callAsConstructor(null, jsArray);
-                }.toJS) as JSObject;
-          } as JSObject Function(int, int))
-              .toJS,
-        ) as JSObject;
-
-        // Handle the promise result
-        promise.callMethod(
-          'then'.toJS,
-          (JSString result) {
-            try {
-              // Parse the metadata result from MediaInfo
-              // print(result.toDart); // Uncomment for debugging
-              final rawMetadataJson = jsonDecode(result.toDart)['media']['track'];
-
-              // Keeping original mappings for MediaInfo.from/toJson() for now so I don't have to fuck with the C++
-              Map<String, dynamic> metadata = <String, dynamic>{
-                'metadata': {},
-                'albumArt': null,
-                'filePath': null,
-              };
-
-              bool isFound = false;
-              for (final data in rawMetadataJson) {
-                if (data['@type'] == 'General') {
-                  isFound = true;
-
                   try {
-                    metadata['albumArt'] = data['Cover_Data'] != null
-                        ? base64Decode(
-                            data['Cover_Data'],
-                          )
-                        : null;
+                    if (offset >= bytes.length) {
+                      // Return empty array for EOF
+                      final emptyArray = Uint8List(0).toJS;
+                      resolve.callAsConstructor(null, emptyArray);
+                      return;
+                    }
+
+                    final endOffset = (offset + chunkSize).clamp(0, bytes.length);
+                    final chunk = bytes.sublist(offset, endOffset);
+                    final jsArray = chunk.toJS; // Use .toJS instead of JSUint8Array.fromList
+                    resolve.callAsConstructor(null, jsArray);
                   } catch (e) {
-                    print('Failed to decode album art');
-                    print(e);
+                    reject.callAsConstructor(null, 'Failed to read chunk: $e'.toJS);
                   }
-                  _kGeneralMetadataKeys.forEach((key, value) {
-                    metadata['metadata'][key] = data[value];
-                  });
-                } else if (data['@type'] == 'Audio') {
-                  _kAudioMetadataKeys.forEach((key, value) {
-                    metadata['metadata'][key] = data[value];
-                  });
+                }.toJS,
+              ) as JSObject;
+            } as JSObject Function(int, int))
+                .toJS;
+
+            // Call analyzeData with file size, readChunk function, and result callback
+            (mediainfo as JSObject).callMethod(
+              'analyzeData'.toJS,
+              bytes.length.toJS,
+              readChunk,
+              (JSString result) {
+                try {
+                  _processMediaInfoResult(result.toDart, completer);
+                } catch (e) {
+                  completer.completeError(Exception('Failed to process MediaInfo result: $e'));
                 }
-              }
-
-              if (!isFound) {
-                completer.completeError(Exception('No metadata found'));
-                return;
-              }
-
-              completer.complete(Metadata.fromJson(metadata));
-            } catch (e) {
-              completer.completeError(e);
-            }
-          }.toJS,
-          (JSAny? error) {
-            completer.completeError(Exception('MediaInfo analysis failed'));
-          }.toJS,
-        );
-      }.toJS,
-      (JSAny? error) {
-        completer.completeError(Exception('Failed to create MediaInfo instance'));
-      }.toJS,
-    );
+              }.toJS,
+            );
+          } catch (e) {
+            completer.completeError(Exception('Failed to analyze data: $e'));
+          }
+        }.toJS,
+        (JSAny? error) {
+          completer.completeError(Exception('Failed to create MediaInfo instance: $error'));
+        }.toJS,
+      );
+    } catch (e) {
+      completer.completeError(Exception('MediaInfo initialization failed: $e'));
+    }
 
     return completer.future;
+  }
+
+  static void _processMediaInfoResult(String resultJson, Completer<Metadata> completer) {
+    try {
+      // Parse the metadata result from MediaInfo
+      final rawMetadataJson = jsonDecode(resultJson)['media']['track'];
+
+      // Create metadata structure compatible with existing parsing
+      Map<String, dynamic> metadata = <String, dynamic>{
+        'metadata': {},
+        'albumArt': null,
+        'filePath': null,
+      };
+
+      bool isFound = false;
+      for (final data in rawMetadataJson) {
+        if (data['@type'] == 'General') {
+          isFound = true;
+
+          try {
+            metadata['albumArt'] = data['Cover_Data'] != null ? base64Decode(data['Cover_Data']) : null;
+          } catch (e) {
+            print('Failed to decode album art: $e');
+          }
+
+          _kGeneralMetadataKeys.forEach((key, value) {
+            metadata['metadata'][key] = data[value];
+          });
+        } else if (data['@type'] == 'Audio') {
+          _kAudioMetadataKeys.forEach((key, value) {
+            metadata['metadata'][key] = data[value];
+          });
+        }
+      }
+
+      if (!isFound) {
+        completer.completeError(Exception('No metadata found'));
+        return;
+      }
+
+      completer.complete(Metadata.fromJson(metadata));
+    } catch (e) {
+      completer.completeError(Exception('Failed to parse MediaInfo result: $e'));
+    }
   }
 }
 
