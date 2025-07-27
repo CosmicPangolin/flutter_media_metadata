@@ -156,11 +156,11 @@ class MetadataRetriever {
             print('Failed to decode album art: $e');
           }
           _kGeneralMetadataKeys.forEach((key, value) {
-            metadata['metadata'][key] = data[value];
+            metadata['metadata'][key] = _extractSafeValue(data[value]);
           });
         } else if (data['@type'] == 'Audio') {
           _kAudioMetadataKeys.forEach((key, value) {
-            metadata['metadata'][key] = data[value];
+            metadata['metadata'][key] = _extractSafeValue(data[value]);
           });
         }
       }
@@ -174,6 +174,60 @@ class MetadataRetriever {
     } catch (e) {
       completer.completeError(Exception('Failed to parse MediaInfo result: $e'));
     }
+  }
+
+  static dynamic _extractSafeValue(dynamic value) {
+    if (value == null) return null;
+    
+    // Handle primitive types directly
+    if (value is String || value is int || value is double || value is bool) {
+      return value;
+    }
+    
+    // Handle Map/Object types (like the Album field)
+    if (value is Map) {
+      // MediaInfo.js specific structure with @dt and #value
+      if (value.containsKey('@dt') && value.containsKey('#value')) {
+        final dataType = value['@dt'];
+        final rawValue = value['#value'];
+        
+        if (dataType == 'binary.base64' && rawValue is String) {
+          try {
+            // Try to decode base64 and convert to UTF-8 string
+            final decoded = base64Decode(rawValue);
+            return utf8.decode(decoded, allowMalformed: true);
+          } catch (e) {
+            // If decoding fails, return the raw base64 string
+            return rawValue;
+          }
+        }
+        
+        // For other data types, return the value as-is
+        return rawValue;
+      }
+      
+      // Fallback for other Map structures
+      if (value.containsKey('#value')) {
+        return _extractSafeValue(value['#value']);
+      }
+      if (value.containsKey('@value')) {
+        return _extractSafeValue(value['@value']);
+      }
+      if (value.containsKey('value')) {
+        return _extractSafeValue(value['value']);
+      }
+      
+      // Convert to string as fallback
+      return value.toString();
+    }
+    
+    // Handle List types
+    if (value is List) {
+      return value.map((e) => _extractSafeValue(e)).join(', ');
+    }
+    
+    // Fallback
+    return value.toString();
   }
 }
 
