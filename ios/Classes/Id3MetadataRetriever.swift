@@ -254,13 +254,27 @@ public final class Id3MetadataRetriever: MetadataRetrieverProtocol {
     guard
       let tcon = metadataItems.first(where: {
         $0.identifier == AVMetadataIdentifier.id3MetadataContentType
-      })?.stringValue,
-      let genreIndex = Int(tcon), genreIndex < Id3MetadataRetriever.standardGenres.count
+      })?.stringValue
     else {
       return nil
     }
-
-    return Id3MetadataRetriever.standardGenres[genreIndex]
+    
+    // Try to parse as numeric genre index first
+    if let genreIndex = Int(tcon), genreIndex >= 0, genreIndex < Id3MetadataRetriever.standardGenres.count {
+      return Id3MetadataRetriever.standardGenres[genreIndex]
+    }
+    
+    // Handle format like "(17)" or "(17)Rock"
+    if tcon.hasPrefix("("), let endParen = tcon.firstIndex(of: ")") {
+      let indexStart = tcon.index(after: tcon.startIndex)
+      let indexStr = String(tcon[indexStart..<endParen])
+      if let genreIndex = Int(indexStr), genreIndex >= 0, genreIndex < Id3MetadataRetriever.standardGenres.count {
+        return Id3MetadataRetriever.standardGenres[genreIndex]
+      }
+    }
+    
+    // Return the string value directly (e.g., "Rock", "Electronic")
+    return tcon.isEmpty ? nil : tcon
   }
 
   func getAuthorName() -> String? {
@@ -270,8 +284,17 @@ public final class Id3MetadataRetriever: MetadataRetrieverProtocol {
   }
 
   func getWriterName() -> String? {
-    // unimplemented
-    return nil
+    // Try composer first (TCOM frame)
+    if let composer = metadataItems.first(where: {
+      $0.identifier == AVMetadataIdentifier.id3MetadataComposer
+    })?.stringValue {
+      return composer
+    }
+    
+    // Fall back to text writer (TEXT frame) 
+    return metadataItems.first(where: {
+      $0.identifier == AVMetadataIdentifier.id3MetadataTextWriter
+    })?.stringValue
   }
 
   func getDiscNumber() -> String? {
@@ -279,6 +302,18 @@ public final class Id3MetadataRetriever: MetadataRetrieverProtocol {
       return nil
     }
     return String(discNumber)
+  }
+
+  func getBpm() -> String? {
+    return metadataItems.first(where: {
+      $0.identifier == AVMetadataIdentifier.id3MetadataBeatsPerMinute
+    })?.stringValue
+  }
+  
+  func getComment() -> String? {
+    return metadataItems.first(where: {
+      $0.identifier == AVMetadataIdentifier.id3MetadataComments
+    })?.stringValue
   }
 
   func getAlbumArt() -> Data? {

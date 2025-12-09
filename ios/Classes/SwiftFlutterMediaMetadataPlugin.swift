@@ -23,6 +23,7 @@ public class SwiftFlutterMediaMetadataPlugin: NSObject, FlutterPlugin {
         var response: [String: Any] = [:]
         response["metadata"] = retriever.getMetadata()
         response["albumArt"] = retriever.getAlbumArt()
+        response["albumArtMimeType"] = retriever.getAlbumArtMimeType()
 
         DispatchQueue.main.async {
           result(response)

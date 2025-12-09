@@ -1,3 +1,72 @@
+## 2.0.0
+
+### 🚀 Major Changes
+
+- **Web streaming support**: Uses mediainfo.js chunked reading for memory-efficient analysis
+  - No more buffering entire files into memory on web
+  - Supports `fromFile`, `fromBytes`, `fromUrl`, and `fromStream` methods
+  - HTTP Range requests for remote file analysis
+
+- **Expanded metadata fields**: Now extracts 40+ metadata fields including:
+  - Audio: channels, sampleRate, bitDepth, audioCodec, audioBitrate, audioBitrateMode
+  - Video: width, height, frameRate, videoCodec, videoBitrate, videoAspectRatio
+  - Format: format, formatProfile, fileSize, encodedApplication
+  - Additional: bpm, comment, albumArtMimeType
+
+- **Configuration options**: New `MetadataOptions` class
+  - `extractAlbumArt` - skip album art for faster extraction
+  - `fullMetadata` - extract all vs basic fields
+  - `chunkSize` - customize streaming chunk size (web)
+  - `headers` - HTTP headers for URL requests (web)
+
+- **Typed exceptions**: Comprehensive error hierarchy
+  - `MetadataException` (base class)
+  - `MetadataExtractionException` - general extraction failures
+  - `MetadataLibraryException` - library not loaded (web)
+  - `MediaSourceException` - file/network errors
+  - `UnsupportedMediaFormatException` - unsupported formats
+  - `PlatformNotSupportedException` - operation not supported
+
+### 🔧 Platform Improvements
+
+**Windows/Linux:**
+- Extended metadata extraction from Audio and Video streams
+- Album art MIME type detection from MediaInfoLib
+
+**Android:**
+- Added MediaExtractor for audio/video track metadata
+- Album art MIME type detection via magic bytes
+- Fixed video metadata extraction when audio track comes first
+
+**iOS/macOS:**
+- Added audio track analysis (channels, sampleRate, bitDepth, codec)
+- Added video track analysis (resolution, frameRate, codec)
+- Fixed ID3 genre parsing for string values (not just numeric codes)
+- Implemented writerName extraction for ID3 tags
+- Added BPM and comment extraction
+- Album art MIME type detection
+
+**Web:**
+- Complete rewrite using modern `dart:js_interop`
+- Chunked/streaming file reading via mediainfo.js
+- HTTP Range request support for URL analysis
+- Custom stream reader API for advanced use cases
+
+### 📦 Dependencies
+
+- Updated to `web: ^1.1.1` (replaced deprecated `package:js`)
+- Updated `flutter_lints: ^6.0.0`
+- Minimum Dart SDK: `>=3.4.0 <4.0.0`
+- Minimum Flutter: `>=3.22.0`
+
+### ⚠️ Breaking Changes
+
+- Web: Removed `MetadataExtractionException` from web exports (use new exception hierarchy)
+- Web: `fromFile` now takes `web.File` instead of `dart:io.File`
+- All platforms: New exception types may require catch block updates
+
+---
+
 ## 1.0.0
 
 - Now supporting all platforms Windows, Linux, macOS, Android, iOS & Web.

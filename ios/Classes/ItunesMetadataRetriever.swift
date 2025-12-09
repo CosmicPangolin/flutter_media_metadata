@@ -135,6 +135,18 @@ public final class ItunesMetadataRetriever: MetadataRetrieverProtocol {
     return String(discNumber)
   }
 
+  func getBpm() -> String? {
+    return metadataItems.first(where: {
+      $0.identifier == AVMetadataIdentifier.iTunesMetadataBeatsPerMin
+    })?.stringValue
+  }
+  
+  func getComment() -> String? {
+    return metadataItems.first(where: {
+      $0.identifier == AVMetadataIdentifier.iTunesMetadataUserComment
+    })?.stringValue
+  }
+
   func getAlbumArt() -> Data? {
     return metadataItems.first(where: {
       $0.identifier == AVMetadataIdentifier.iTunesMetadataCoverArt
