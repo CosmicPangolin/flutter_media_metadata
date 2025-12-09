@@ -8,7 +8,6 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
 
@@ -76,6 +75,15 @@ JSObject? _optionsToJs(MetadataOptions? options) {
 /// - [fromUrl] - Extract metadata from a URL using Range requests
 /// - [fromStream] - Extract metadata using a custom chunk reader
 class MetadataRetriever {
+  /// Registers this plugin with the Flutter engine for web.
+  ///
+  /// This is called automatically by Flutter's plugin registration system.
+  static void registerWith(Registrar registrar) {
+    // No-op: This plugin uses a pure Dart API on web, not platform channels.
+    // The registration hook is required by Flutter's plugin system but
+    // actual metadata extraction is done via JS interop with mediainfo.js.
+  }
+
   /// Check if mediainfo.js is loaded and available.
   static bool get isAvailable {
     try {
@@ -315,27 +323,5 @@ class MetadataRetriever {
     };
 
     return Metadata.fromJson(metadataMap);
-  }
-}
-
-/// Plugin class for web platform registration
-class MetadataRetrieverPluginWeb {
-  static void registerWith(Registrar registrar) {
-    final MethodChannel channel = MethodChannel(
-      'flutter_media_metadata',
-      const StandardMethodCodec(),
-      registrar,
-    );
-    final pluginInstance = MetadataRetrieverPluginWeb();
-    channel.setMethodCallHandler(pluginInstance.handleMethodCall);
-  }
-
-  Future<dynamic> handleMethodCall(MethodCall call) {
-    throw PlatformException(
-      code: 'Unimplemented',
-      details:
-          'flutter_media_metadata for web doesn\'t implement \'${call.method}\'. '
-          'Use MetadataRetriever.fromFile(), fromBytes(), fromUrl(), or fromStream() instead.',
-    );
   }
 }
