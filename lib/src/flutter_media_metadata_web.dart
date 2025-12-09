@@ -4,10 +4,10 @@
 /// All rights reserved.
 /// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
+import 'dart:typed_data';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
@@ -330,212 +330,12 @@ class MetadataRetrieverPluginWeb {
     channel.setMethodCallHandler(pluginInstance.handleMethodCall);
   }
 
-  Future<dynamic> handleMethodCall(MethodCall call) => throw PlatformException(
-        code: 'Unimplemented',
-        details: 'flutter_media_metadata for web doesn\'t implement \'${call.method}\'',
-      );
-
-  /// Extracts [Metadata] from a [File]. Works on Windows, Linux, macOS, Android & iOS.
-  static Future<Metadata> fromFile(dynamic _) async {
-    throw UnimplementedError(
-      '[MetadataRetriever.fromFile] is not supported on web. This method is only available for Windows, Linux, macOS, Android or iOS. Use [MetadataRetriever.fromBytes] instead.',
+  Future<dynamic> handleMethodCall(MethodCall call) {
+    throw PlatformException(
+      code: 'Unimplemented',
+      details:
+          'flutter_media_metadata for web doesn\'t implement \'${call.method}\'. '
+          'Use MetadataRetriever.fromFile(), fromBytes(), fromUrl(), or fromStream() instead.',
     );
   }
-
-  /// Extracts [Metadata] from [Uint8List]. Works only on Web.
-  static Future<Metadata> fromBytes(Uint8List bytes) async {
-    final completer = Completer<Metadata>();
-
-    try {
-      // Check if MediaInfo factory is available
-      if (globalContext['MediaInfo'] == null) {
-        completer
-            .completeError(Exception('MediaInfo.js library not loaded. Make sure to include the script in your HTML.'));
-        return completer.future;
-      }
-
-      // MediaInfo is now a factory function with the ESM bundle
-      final mediaInfoFactory = globalContext['MediaInfo'] as JSFunction;
-
-      // Create options
-      final opts = newObject();
-      opts['format'] = 'JSON'.toJS;
-      opts['full'] = true.toJS;
-      opts['coverData'] = true.toJS;
-
-      // Call the factory function
-      final mediaInfoPromise = mediaInfoFactory.callAsConstructor(opts) as JSObject;
-
-      // Handle the factory promise
-      mediaInfoPromise.callMethod(
-        'then'.toJS,
-        (JSAny mediainfo) {
-          try {
-            // Create a simpler readChunk function that uses async/await pattern
-            final readChunkJS = (int chunkSize, int offset) {
-              // Create a resolved Promise directly
-              final promiseConstructor = globalContext['Promise'] as JSFunction;
-
-              // Calculate the chunk
-              final endOffset = (offset + chunkSize).clamp(0, bytes.length);
-              final sublist = bytes.sublist(offset, endOffset);
-
-              // Return Promise.resolve(chunk)
-              return (promiseConstructor as JSObject).callMethod('resolve'.toJS, sublist.toJS) as JSObject;
-            }.toJS;
-
-            // Now use analyzeData with the callback approach
-            (mediainfo as JSObject).callMethod(
-              'analyzeData'.toJS,
-              bytes.length.toJS,
-              readChunkJS,
-              (JSString result) {
-                try {
-                  _processResult(result.toDart, completer);
-                } catch (e) {
-                  completer.completeError(Exception('Result processing failed: $e'));
-                }
-              }.toJS,
-            );
-          } catch (e) {
-            completer.completeError(Exception('Failed to call analyzeData: $e'));
-          }
-        }.toJS,
-        (JSAny? error) {
-          completer.completeError(Exception('MediaInfo factory failed: $error'));
-        }.toJS,
-      );
-
-      // Add timeout
-      Timer(Duration(seconds: 30), () {
-        if (!completer.isCompleted) {
-          completer.completeError(Exception('MediaInfo analysis timed out'));
-        }
-      });
-    } catch (e) {
-      completer.completeError(Exception('MediaInfo initialization failed: $e'));
-    }
-
-    return completer.future;
-  }
-
-  static void _processResult(String resultJson, Completer<Metadata> completer) {
-    try {
-      final rawMetadataJson = jsonDecode(resultJson)['media']['track'];
-
-      Map<String, dynamic> metadata = <String, dynamic>{
-        'metadata': {},
-        'albumArt': null,
-        'filePath': null,
-      };
-
-      bool isFound = false;
-      for (final data in rawMetadataJson) {
-        if (data['@type'] == 'General') {
-          isFound = true;
-          try {
-            metadata['albumArt'] = data['Cover_Data'] != null ? base64Decode(data['Cover_Data']) : null;
-          } catch (e) {
-            print('Failed to decode album art: $e');
-          }
-          _kGeneralMetadataKeys.forEach((key, value) {
-            metadata['metadata'][key] = _extractSafeValue(data[value]);
-          });
-        } else if (data['@type'] == 'Audio') {
-          _kAudioMetadataKeys.forEach((key, value) {
-            metadata['metadata'][key] = _extractSafeValue(data[value]);
-          });
-        }
-      }
-
-      if (!isFound) {
-        completer.completeError(Exception('No metadata found'));
-        return;
-      }
-
-      completer.complete(Metadata.fromJson(metadata));
-    } catch (e) {
-      completer.completeError(Exception('Failed to parse MediaInfo result: $e'));
-    }
-  }
-
-  static dynamic _extractSafeValue(dynamic value) {
-    if (value == null) return null;
-    
-    // Handle primitive types directly
-    if (value is String || value is int || value is double || value is bool) {
-      return value;
-    }
-    
-    // Handle Map/Object types (like the Album field)
-    if (value is Map) {
-      // MediaInfo.js specific structure with @dt and #value
-      if (value.containsKey('@dt') && value.containsKey('#value')) {
-        final dataType = value['@dt'];
-        final rawValue = value['#value'];
-        
-        if (dataType == 'binary.base64' && rawValue is String) {
-          try {
-            // Try to decode base64 and convert to UTF-8 string
-            final decoded = base64Decode(rawValue);
-            return utf8.decode(decoded, allowMalformed: true);
-          } catch (e) {
-            // If decoding fails, return the raw base64 string
-            return rawValue;
-          }
-        }
-        
-        // For other data types, return the value as-is
-        return rawValue;
-      }
-      
-      // Fallback for other Map structures
-      if (value.containsKey('#value')) {
-        return _extractSafeValue(value['#value']);
-      }
-      if (value.containsKey('@value')) {
-        return _extractSafeValue(value['@value']);
-      }
-      if (value.containsKey('value')) {
-        return _extractSafeValue(value['value']);
-      }
-      
-      // Convert to string as fallback
-      return value.toString();
-    }
-    
-    // Handle List types
-    if (value is List) {
-      return value.map((e) => _extractSafeValue(e)).join(', ');
-    }
-    
-    // Fallback
-    return value.toString();
-  }
 }
-
-// Helper function to create new objects
-JSObject newObject() => (globalContext['Object']! as JSFunction).callAsConstructor() as JSObject;
-
-const _kGeneralMetadataKeys = <String, String>{
-  "trackName": "Track",
-  "trackArtistNames": "Performer",
-  "albumName": "Album",
-  "albumArtistName": "Album_Performer",
-  "trackNumber": "Track_Position",
-  "albumLength": "Track_Position_Total",
-  "year": "Recorded_Date",
-  "genre": "Genre",
-  "writerName": "WrittenBy",
-  "trackDuration": "Duration",
-  "bitrate": "OverallBitRate",
-  "mimeType": "InternetMediaType",
-  "albumArtMimeType": "Cover_Mime",
-  "bpm": "BPM",
-  "comment": "Comment",
-};
-
-const _kAudioMetadataKeys = <String, String>{
-  "channels": "Channels",
-  "sampleRate": "SamplingRate",
-};
