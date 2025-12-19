@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
@@ -19,8 +20,15 @@ import 'package:flutter_media_metadata/src/models/exceptions.dart';
 // JavaScript Interop Definitions
 // ============================================
 
-@JS('typeof FlutterMediaInfo !== "undefined"')
-external bool get _isFlutterMediaInfoDefined;
+/// Check if FlutterMediaInfo is defined on the global object
+bool get _isFlutterMediaInfoDefined {
+  try {
+    final flutterMediaInfo = globalContext['FlutterMediaInfo'];
+    return flutterMediaInfo != null && !flutterMediaInfo.isUndefinedOrNull;
+  } catch (_) {
+    return false;
+  }
+}
 
 @JS('FlutterMediaInfo.analyzeFile')
 external JSPromise<JSObject> _analyzeFile(web.File file, JSAny? options);
@@ -39,7 +47,17 @@ external JSPromise<JSObject> _analyzeStream(
 );
 
 @JS('FlutterMediaInfo.isMediaInfoAvailable')
-external JSBoolean _isMediaInfoAvailable();
+external JSBoolean? _jsIsMediaInfoAvailable();
+
+/// Safe wrapper to check if MediaInfo is available
+bool _isMediaInfoAvailable() {
+  try {
+    final result = _jsIsMediaInfoAvailable();
+    return result?.toDart ?? false;
+  } catch (_) {
+    return false;
+  }
+}
 
 @JS('FlutterMediaInfo.getVersion')
 external JSPromise<JSString> _getVersion();
@@ -87,7 +105,7 @@ class MetadataRetriever {
   /// Check if mediainfo.js is loaded and available.
   static bool get isAvailable {
     try {
-      return _isFlutterMediaInfoDefined && _isMediaInfoAvailable().toDart;
+      return _isFlutterMediaInfoDefined && _isMediaInfoAvailable();
     } catch (_) {
       return false;
     }
@@ -115,7 +133,7 @@ class MetadataRetriever {
       );
     }
 
-    if (!_isMediaInfoAvailable().toDart) {
+    if (!_isMediaInfoAvailable()) {
       throw MetadataLibraryException(
         'mediainfo.js is not loaded. Make sure to include mediainfo.js '
         'before mediainfo_bridge.js in your index.html:\n\n'
