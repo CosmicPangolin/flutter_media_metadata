@@ -1,6 +1,6 @@
 name: flutter_media_metadata
 description: A Flutter plugin to read metadata of media files. Supports streaming/chunked reading on web for memory efficiency.
-version: 3.0.1
+version: 3.0.2
 homepage: https://github.com/alexmercerind/flutter_media_metadata
 repository: https://github.com/alexmercerind/flutter_media_metadata
 documentation: https://github.com/alexmercerind/flutter_media_metadata/blob/master/README.md
